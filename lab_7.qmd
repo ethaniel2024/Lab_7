@@ -1,0 +1,238 @@
+---
+title: "STAT 386 Lab 7: Data Visualization"
+author: "Your Name"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: false
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Purpose
+
+In Lab 6, you collected data from the web. In Lab 5, you developed a reproducible process for cleaning and organizing data. Now use the cleaned talk-level dataset to explore patterns and communicate one finding clearly.
+
+The goal is not to make the largest number of plots. Use visualizations to investigate a focused descriptive question, assess the quality of the evidence, and produce one figure another person can understand.
+
+By the end of this lab, you should be able to:
+- verify that an analysis-ready dataset has the structure and quality needed for visualization;
+- formulate a focused, answerable exploratory question;
+- choose chart types and visual encodings that fit the variables;
+- compare distributions and patterns across meaningful groups;
+- improve a figure through labels, units, scales, ordering, and accessibility;
+- describe what a visualization shows while acknowledging limitations.
+
+This lab is exploratory. Do not make causal claims or treat visual comparisons as formal statistical inference.
+
+# Setup
+
+Use the cleaned dataset produced by the previous lab. Do not scrape the website again, and do not edit Lab 6 raw files.
+
+```{python}
+from pathlib import Path
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
+DATA_PATH = Path("data/processed/talks_clean.csv")
+FIGURE_DIR = Path("figures")
+FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+talks = pd.read_csv(DATA_PATH)
+talks.head()
+```
+
+If your cleaned file has a different name or location, update `DATA_PATH`. Do not silently substitute a different dataset.
+
+# Part 1: Verify the data before plotting
+
+A visualization can be technically correct but misleading if the data are incomplete, duplicated, or incorrectly typed. Begin with basic checks.
+
+```{python}
+print(f"Rows: {len(talks):,}")
+print(f"Columns: {len(talks.columns):,}")
+print(talks.dtypes)
+```
+
+```{python}
+missing_summary = (
+    talks.isna().sum().rename("missing").to_frame()
+    .assign(missing_percent=lambda x: 100 * x["missing"] / len(talks))
+    .sort_values("missing", ascending=False)
+)
+missing_summary
+```
+
+```{python}
+print("Duplicate rows:", talks.duplicated().sum())
+```
+
+**Questions**
+1. Which variables have missing values? Could those missing values affect your planned visualizations?
+2. Are there duplicate rows? What would happen if duplicate talks were counted more than once?
+3. Which variables are numeric, categorical, or dates? Do any need type conversion?
+
+The examples below assume columns named `talk_date`, `word_count`, and `session`. If your cleaned dataset uses different names, adjust the code and state which columns you used.
+
+```{python}
+if "talk_date" in talks.columns:
+    talks["talk_date"] = pd.to_datetime(talks["talk_date"], errors="coerce")
+```
+
+# Part 2: Choose a focused question
+
+Choose one descriptive question answerable with variables in your cleaned dataset. Identify the quantity you want to describe, the group or time dimension you want to compare, and the population/time period represented.
+
+Possible directions:
+- How does the distribution of talk length vary across conference sessions?
+- How has talk length varied across conference years?
+- How does the number of talks vary by session or year?
+- How does a measurable talk characteristic vary across speaker roles?
+
+**My exploratory question:**
+
+> Replace this sentence with your question.
+
+**Why this question is useful:**
+
+> Explain what you hope to learn and which variables will help answer it.
+
+# Part 3: Explore the data visually
+
+Create at least three useful exploratory visualizations. They should help investigate your question; do not create three nearly identical charts.
+
+## Visualization 1: Examine a distribution
+
+```{python}
+if "word_count" in talks.columns:
+    sns.histplot(data=talks, x="word_count", bins=25)
+    plt.xlabel("Words per talk")
+    plt.ylabel("Number of talks")
+    plt.title("Distribution of talk length")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("Choose an available numeric variable and update this plot.")
+```
+
+What does the distribution suggest? Are there unusually small or large observations? Does it appear symmetric or skewed?
+
+## Visualization 2: Compare groups
+
+```{python}
+if {"session", "word_count"}.issubset(talks.columns):
+    order = talks["session"].value_counts().index
+    sns.boxplot(data=talks, x="session", y="word_count", order=order)
+    plt.xlabel("Session")
+    plt.ylabel("Words per talk")
+    plt.title("Talk length by session")
+    plt.xticks(rotation=30, ha="right")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("Choose an available categorical and numeric variable and update this plot.")
+```
+
+Compare medians, spread, and potential outliers. Are group sizes large enough to make the comparison useful? Check counts rather than relying on the plot alone.
+
+```{python}
+if "session" in talks.columns:
+    talks["session"].value_counts(dropna=False)
+```
+
+## Visualization 3: Examine a time pattern
+
+```{python}
+if {"talk_date", "word_count"}.issubset(talks.columns):
+    yearly = (
+        talks.dropna(subset=["talk_date", "word_count"])
+        .assign(year=lambda d: d["talk_date"].dt.year)
+        .groupby("year", as_index=False)
+        .agg(median_words=("word_count", "median"),
+             number_of_talks=("word_count", "size"))
+    )
+    sns.lineplot(data=yearly, x="year", y="median_words", marker="o")
+    plt.xlabel("Conference year")
+    plt.ylabel("Median words per talk")
+    plt.title("Median talk length by conference year")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("Choose an available date and numeric variable and update this plot.")
+```
+
+Describe the pattern without assuming that a trend is meaningful or that one variable caused another. Could changes in group size or data coverage affect the picture?
+
+# Part 4: Develop one polished figure
+
+Choose the most useful visualization from your exploration and revise it into a polished figure. Your final figure should:
+- communicate one main point;
+- use a chart type appropriate for the variables;
+- have a descriptive title;
+- label axes and include units where applicable;
+- use a sensible scale and category order;
+- make missing values and group sizes clear when relevant;
+- use color purposefully and remain understandable without relying on color alone;
+- avoid unnecessary decoration, distorted scales, and misleading emphasis.
+
+The example below creates a polished yearly median comparison. Adapt it to your own question if another visualization is more appropriate.
+
+```{python}
+if {"talk_date", "word_count"}.issubset(talks.columns):
+    yearly = (
+        talks.dropna(subset=["talk_date", "word_count"])
+        .assign(year=lambda d: d["talk_date"].dt.year)
+        .groupby("year", as_index=False)
+        .agg(median_words=("word_count", "median"),
+             number_of_talks=("word_count", "size"))
+    )
+    fig, ax = plt.subplots(figsize=(9, 5))
+    sns.lineplot(data=yearly, x="year", y="median_words",
+                 marker="o", linewidth=2, ax=ax)
+    ax.set(title="Median talk length across conference years",
+           xlabel="Conference year", ylabel="Median words per talk")
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(FIGURE_DIR / "lab7_final_figure.png",
+                dpi=300, bbox_inches="tight")
+    plt.show()
+else:
+    print("Adapt this code to create and save your final figure.")
+```
+
+**Final figure interpretation**
+
+In a short paragraph, explain:
+1. What is the main pattern or comparison?
+2. Which design choices make that pattern easy to see?
+3. What should a reader avoid concluding?
+
+# Part 5: Reflect on limitations
+
+1. What is one limitation of the data that affects your analysis?
+2. How could missing values or unequal group sizes affect the visual impression?
+3. What alternative visualization might lead a reader to notice something different?
+4. What additional data would help investigate your question more fully?
+
+# Part 6: AI visualization review
+
+After completing your analysis and polished figure, request a visualization review using the course AI collaborator workflow. The collaborator should review your work, not replace your analysis.
+
+Respond to the review as instructed. Identify at least one suggestion you accepted or rejected and explain why. You are responsible for the final design and interpretation.
+
+# Submission checklist
+
+- [ ] I used the cleaned dataset produced by the previous lab.
+- [ ] I checked data types, missing values, and duplicate records.
+- [ ] I stated a focused exploratory question.
+- [ ] I created at least three useful exploratory visualizations.
+- [ ] I checked group sizes when comparing categories.
+- [ ] I created one polished final figure and saved it in `figures/`.
+- [ ] My figure has a descriptive title, labeled axes, and appropriate units.
+- [ ] My interpretation describes evidence without making causal claims.
+- [ ] I discussed limitations and responded to the AI review.
+- [ ] I rendered `lab_7.qmd` successfully to HTML.
